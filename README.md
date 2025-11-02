@@ -1,0 +1,2 @@
+# testnet
+Decentralized domain names
