@@ -37,22 +37,24 @@ fn revi(tok: ByteArray, i: Int, l: Int) -> Bool {
 validator delegatens(tldpol: ByteArray) {
 //fee wallet and tld defined in mesh
  mint(_rdmr: Data, policy_id: PolicyId, tx: Transaction) {
-let feewallet=#"21133e28f9f9db50ab91126fc4163c79152851a041f021952c53da35"
-let utility_id=#"ce9fe5e0621b0a25144630a82c05dcb232f64716e853fef625ff5be8"
-let utilityname="dot0"
- let charstld=4 // lenght used by time uid
  let Transaction { mint, outputs, inputs, .. } = tx // grab inputs, mint and outputs only
 // now grab minted asset ammount and name
  expect [Pair(asset_name, amount)] =
       mint
         |> assets.tokens(policy_id)
         |> dict.to_pairs()
-// now we check name is a valid domain name
- let longi=builtin.length_of_bytearray(asset_name) // total lenght
- let domainlong=longi-charstld //lenght of domain only
-//remove time uid
-let orignft=builtin.slice_bytearray(0,domainlong, asset_name)
-//find payment
+// if its minting
+if(amount == 1){
+let feewallet=#"21133e28f9f9db50ab91126fc4163c79152851a041f021952c53da35"
+let utility_id=#"ce9fe5e0621b0a25144630a82c05dcb232f64716e853fef625ff5be8"
+let utilityname="dot0"
+
+// check if its domain owner
+ expect Some(hasdomain) = list.find(outputs,fn(output){
+  quantity_of(output.value,tldpol, asset_name) == 1
+})
+
+//find payment of utility token
  expect Some(payment) =
   list.find(outputs,fn(output){output.address.payment_credential==VerificationKey(feewallet)})
  expect [Pair(utility, paid)] =
@@ -60,19 +62,19 @@ let orignft=builtin.slice_bytearray(0,domainlong, asset_name)
         |> assets.tokens(utility_id)
         |> dict.to_pairs()
 
-trace orignft
- expect Some(hasdomain) = list.find(outputs,fn(output){
-  quantity_of(output.value,tldpol, orignft) == 1
-})
-trace hasdomain
+//now check if minted token is being sent to backend
+ expect [Pair(minting, one)] =
+      payment.value
+        |> assets.tokens(policy_id)
+        |> dict.to_pairs()
+  //return true if correctly paid, and delegation sent to backend
+  minting==asset_name && one==1 && utility==utilityname && paid==1
 
-
-//return validation bool - we already validated NFT is being spent now
-//NFT is spent to user's change addr but can be spent anywere
-//because user is still the owner
-// only 1 NFT + payment ok + correct currency
-amount == 1  && paid==1 && utility==utilityname
-  }  else(_) {
+  }else{
+  //return true if its burning, we already validated if owner, payment not required
+    amount == -1
+  }
+  }else(_){
     fail
   }
 }
@@ -89,14 +91,14 @@ let orig = from_asset("ASDF"
     |> add("foo", "asset#1", 1)
     |> add(pol, "g.d0.to", 1)
     |> add("bar", "asset#2", 14)
-  let domain_name = "g.d0.toFFFF"
+  let domain_name = "g.d0.to"
   let tx =   mocktail_tx()
     |> tx_in(True, mock_tx_hash(0), 0, orig, mock_pub_key_address(0, None))
 //    |> tx_out(True, mock_pub_key_address(0, None), orig)
     |> tx_out(True, mock_pub_key_address(0, None), valores)
     |> tx_out(True,create_address(#"21133e28f9f9db50ab91126fc4163c79152851a041f021952c53da35"), valores)
     |> tx_out(True, mock_pub_key_address(0, None), orig)
-    |> mint(True, 1, mock_policy_id(0), domain_name)
+    |> mint(True, -1, mock_policy_id(0), domain_name)
     |> complete()
   delegatens.mint(pol,"", mock_policy_id(0), tx)
 }
