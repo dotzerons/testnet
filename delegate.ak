@@ -4,8 +4,8 @@ use aiken/builtin
 use aiken/collection/dict.{Dict, from_ascending_pairs_with}
 
 use cardano/address.{Address, VerificationKey}
-use cardano/assets.{PolicyId, from_asset, zero,quantity_of,add,AssetName}
-use cardano/transaction.{Transaction} as tx
+use cardano/assets.{PolicyId, from_asset, zero,quantity_of,add,AssetName, policies}
+use cardano/transaction.{InlineDatum,Transaction} as tx
 // following imports are for test use only
 use mocktail.{complete, mint, mocktail_tx, tx_in, tx_out}
 use mocktail/virgin_address.{mock_pub_key_address}
@@ -18,6 +18,9 @@ fn create_address(pkh: ByteArray) -> Address {
     }
 }
 //
+pub type Datumd{
+inner: ByteArray,
+}
 pub opaque type Value {
   inner: Dict<PolicyId, Dict<AssetName, Int>>,
 }
@@ -67,8 +70,25 @@ let utilityname="dot0"
       payment.value
         |> assets.tokens(policy_id)
         |> dict.to_pairs()
+
+//get datum and check
+    expect Some(nft_output) =
+      list.find(
+        outputs,
+        fn(output) { list.has(policies(output.value), policy_id) },
+      )
+
+    expect InlineDatum(datum) = nft_output.datum
+    expect dele: ByteArray = datum
+//    expect InlineDatum(dele) = nft_output.datum
+
+//let dele2=builtin.serialise_data(dele)
+//let longi=builtin.length_of_bytearray(dele2) // total lenght
+
+//trace dele
   //return true if correctly paid, and delegation sent to backend
   minting==asset_name && one==1 && utility==utilityname && paid==1
+// && (builtin.index_bytearray(dele, 0)==0 && (longi==9||longi==41))
 
   }else{
   //return true if its burning, we already validated if owner, payment not required
