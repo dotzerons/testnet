@@ -1,22 +1,11 @@
 use aiken/collection/dict
 use aiken/collection/list
 use aiken/builtin
-use aiken/collection/dict.{Dict, from_ascending_pairs_with}
+use aiken/collection/dict.{Dict}
 
-use cardano/address.{Address, VerificationKey}
-use cardano/assets.{PolicyId, from_asset, zero,quantity_of,add,AssetName, policies}
-use cardano/transaction.{InlineDatum,Transaction} as tx
-// following imports are for test use only
-use mocktail.{complete, mint, mocktail_tx, tx_in, tx_out}
-use mocktail/virgin_address.{mock_pub_key_address}
-use mocktail/virgin_key_hash.{mock_policy_id}
-use mocktail/virgin_output_reference.{mock_tx_hash}
-fn create_address(pkh: ByteArray) -> Address {
-    Address {
-        payment_credential: VerificationKey( pkh ),
-        stake_credential: None,
-    }
-}
+use cardano/address.{Address, Script,from_script}
+use cardano/assets.{PolicyId, quantity_of,AssetName, policies}
+use cardano/transaction.{InlineDatum,Transaction,OutputReference} as tx
 
 fn revispaces(tok: ByteArray, i: Int, l: Int) -> Bool {
         if l==i || i==255 { //reached end with no space or first dns bigger than RFC
@@ -74,20 +63,49 @@ fn revi(tok: ByteArray, i: Int, l: Int) -> Bool {
 }
 
 validator delegatens(tldpol: ByteArray) {
-//fee wallet and tld defined in mesh
+  spend(_d, name: ByteArray, utxo_ref: OutputReference, tx: Transaction) {
+
+        expect Some(oracle_input) =
+          list.find(tx.inputs, fn(input) { input.output_reference == utxo_ref })
+        // Get the oracle's output
+        expect [oracle_output] =
+          list.filter(
+            tx.outputs,
+            fn(o) { o.address == oracle_input.output.address },
+          )
+
+
+	expect Script(wa)=oracle_input.output.address.payment_credential
+	expect policy_id: ByteArray = wa
+
+
+        // Fail if oracle's input doesn't contain NFT
+        expect
+          1 == quantity_of(
+            oracle_input.output.value,
+            policy_id,
+            name,
+          )
+        // Fail if oracle's output doesn't contain NFT
+        expect
+          1 == quantity_of(
+            oracle_output.value,
+            policy_id,
+            name,
+          )
+True
+  }
+
+
  mint(_rdmr: Data, policy_id: PolicyId, tx: Transaction) {
- let Transaction { mint, outputs, inputs, .. } = tx // grab inputs, mint and outputs only
+ let Transaction { mint, outputs, .. } = tx // grab inputs, mint and outputs only
 // now grab minted asset ammount and name
- expect [Pair(asset_name, amount)] =
+ expect [Pair(asset_name, 1)] =
       mint
         |> assets.tokens(policy_id)
         |> dict.to_pairs()
-// if its minting
-if(amount == 1){
-let feewallet=#"21133e28f9f9db50ab91126fc4163c79152851a041f021952c53da35"
 let utility_id=#"ce9fe5e0621b0a25144630a82c05dcb232f64716e853fef625ff5be8"
 let utilityname="dot0"
-
 // check if its domain owner
  expect Some(hasdomain) = list.find(outputs,fn(output){
   quantity_of(output.value,tldpol, asset_name) == 1
@@ -95,14 +113,14 @@ let utilityname="dot0"
 
 //find payment of utility token
  expect Some(payment) =
-  list.find(outputs,fn(output){output.address.payment_credential==VerificationKey(feewallet)})
- expect [Pair(utility, paid)] =
+  list.find(outputs,fn(output){output.address.payment_credential==Script(policy_id)})//VerificationKey
+ expect [Pair(utility, 1)] =
       payment.value
         |> assets.tokens(utility_id)
         |> dict.to_pairs()
 
 //now check if minted token is being sent to backend
- expect [Pair(minting, one)] =
+ expect [Pair(minting, 1)] =
       payment.value
         |> assets.tokens(policy_id)
         |> dict.to_pairs()
@@ -119,7 +137,7 @@ let utilityname="dot0"
 let longi=builtin.length_of_bytearray(dele) // total lenght
 
   //return true if correctly paid, and delegation sent to backend
-  minting==asset_name && one==1 && utility==utilityname && paid==1
+  minting==asset_name && utility==utilityname
  && 
 
 //00 is self delegated, else NS
@@ -129,36 +147,7 @@ if(builtin.index_bytearray(dele, 0)==0){
 //check ns and lenght, is cheaper to check len first
 	longi < 509 && revispaces(dele,0,longi)
 }
-
-  }else{
-  //return true if its burning, we already validated if owner, payment not required
-    amount == -1
-  }
   }else(_){
     fail
   }
-}
-
-test sdgg() {
-let pol=#"a9a8477a5ca6183597449aff4bc66eec6b3cdc60ba885683953ac0c3"
-let valores = from_asset(#"ce9fe5e0621b0a25144630a82c05dcb232f64716e853fef625ff5be8"
-, #"646f7430", 1)
-    |> add("foo", "asset#1", 1)
-    |> add("foo", "asset#2", 1)
-    |> add("bar", "asset#2", 14)
-let orig = from_asset("ASDF"
-, "ASDA", 1)
-    |> add("foo", "asset#1", 1)
-    |> add(pol, "g.d0.to", 1)
-    |> add("bar", "asset#2", 14)
-  let domain_name = "g.d0.to"
-  let tx =   mocktail_tx()
-    |> tx_in(True, mock_tx_hash(0), 0, orig, mock_pub_key_address(0, None))
- //   |> tx_out(True, create_address(#"21133e28f9f9db50ab91126fc4163c79152851a041f021952c53da35"), orig)
-    |> tx_out(True, mock_pub_key_address(0, None), valores)
-    |> tx_out(True,create_address(#"21133e28f9f9db50ab91126fc4163c79152851a041f021952c53da35"), valores)
-    |> tx_out(True, mock_pub_key_address(0, None), orig)
-    |> mint(True, -1, mock_policy_id(0), domain_name)
-    |> complete()
-  delegatens.mint(pol,"", mock_policy_id(0), tx)
 }
